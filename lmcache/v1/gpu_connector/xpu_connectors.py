@@ -236,7 +236,7 @@ class VLLMPagedMemXPUConnectorV2(GPUConnectorInterface):
         kv_cache_pointers = self._initialize_pointers(self.kvcaches)
 
         with torch.xpu.stream(self.store_stream):
-            if self.gpu_buffer is None or end - start != self.gpu_buffer.shape[2]:
+            if self.gpu_buffer is None or end - start > self.gpu_buffer.shape[2]:
                 lmc_ops.multi_layer_kv_transfer(
                     memory_obj.tensor,
                     kv_cache_pointers,
@@ -1400,7 +1400,7 @@ class SGLangXPUConnector(GPUConnectorInterface):
 
         kv_cache_pointers = self._initialize_pointers(kvcaches)
 
-        if self.gpu_buffer is None or end - start != self.gpu_buffer.shape[2]:
+        if self.gpu_buffer is None or end - start > self.gpu_buffer.shape[2]:
             lmc_ops.multi_layer_kv_transfer_unilateral(
                 memory_obj.tensor,
                 kv_cache_pointers,
