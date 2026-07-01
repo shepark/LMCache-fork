@@ -547,6 +547,15 @@ def _read_hugepage_info() -> Optional[Tuple[int, int, int]]:
         return None
 
 
+# XPU: the pinned-alloc C path (lmc_ops.alloc_pinned_ptr) is CUDA-only and is NOT
+# compiled into the xpu_ops extension, so the host buffer would silently fall back to
+# pageable memory (~5x slower D2H). torch.xpu supports real device-pinned host tensors
+# (verified: torch.empty(..., pin_memory=True).is_pinned() is True), so on XPU we
+# allocate the buffer through torch's pinned allocator instead. We retain references
+# here so the backing memory is not freed while in use.
+_XPU_PINNED_BUFFERS: dict = {}
+
+
 def _allocate_cpu_memory(
     size: int,
     numa_mapping: Optional[NUMAMapping] = None,
@@ -555,6 +564,39 @@ def _allocate_cpu_memory(
 ) -> torch.Tensor:
     if size == 0:
         return torch.empty(0, dtype=torch.uint8)
+
+    if torch_device_type == "xpu":
+        # XPU pinned (USM host) memory. Prefer the SYCL sycl::malloc_host op
+        # (lmc_ops.alloc_pinned_ptr_xpu) — the proper analog of the CUDA
+        # alloc_pinned_ptr path; it allocates true device-accessible host memory
+        # and supports larger single allocations (~30 GB) than torch's pinned
+        # caching allocator (hard 2**34 = 16 GiB cap with silent pageable
+        # fallback). Fall back to torch pin_memory if the op is unavailable.
+        try:
+            dev_index = torch_dev.current_device()
+            ptr = lmc_ops.alloc_pinned_ptr_xpu(size, dev_index)
+            array_type = ctypes.c_uint8 * size
+            buf = array_type.from_address(ptr)
+            buffer = torch.frombuffer(buf, dtype=torch.uint8)
+            _XPU_PINNED_BUFFERS[ptr] = (buffer, dev_index)
+            logger.info(
+                "LocalCPU host buffer: %d bytes pinned via sycl::malloc_host", size
+            )
+            return buffer
+        except (AttributeError, RuntimeError) as e:
+            logger.warning(
+                "sycl::malloc_host pinned alloc unavailable/failed (%s); "
+                "falling back to torch pin_memory (<=16 GiB).",
+                e,
+            )
+            buffer = torch.empty(size, dtype=torch.uint8, pin_memory=True)
+            _XPU_PINNED_BUFFERS[buffer.data_ptr()] = (buffer, None)
+            logger.info(
+                "LocalCPU host buffer: %d bytes pinned via torch.xpu (is_pinned=%s)",
+                size,
+                buffer.is_pinned(),
+            )
+            return buffer
 
     resolved = _resolve_pinned_alloc_free(
         numa_mapping,
@@ -607,6 +649,17 @@ def _free_cpu_memory(
 ) -> None:
     if torch_dev.is_available():
         torch_dev.synchronize()
+
+    if torch_device_type == "xpu":
+        entry = _XPU_PINNED_BUFFERS.pop(buffer.data_ptr(), None)
+        # SYCL-allocated buffers (dev_index not None) must be freed via
+        # sycl::free; torch-pinned fallbacks (None) are freed by GC.
+        if entry is not None and entry[1] is not None:
+            try:
+                lmc_ops.free_pinned_ptr_xpu(buffer.data_ptr(), entry[1])
+            except (AttributeError, RuntimeError) as e:
+                logger.warning("free_pinned_ptr_xpu failed: %s", e)
+        return
 
     resolved = _resolve_pinned_alloc_free(
         numa_mapping,

@@ -57,6 +57,12 @@ PYBIND11_MODULE(xpu_ops, m) {
   m.def("lmcache_memcpy_async", &lmcache_memcpy_async,
         py::call_guard<py::gil_scoped_release>());
 
+  // Pinned (USM host) allocation -- SYCL analog of the CUDA alloc_pinned_ptr.
+  m.def("alloc_pinned_ptr_xpu", &alloc_pinned_ptr_xpu, py::arg("size"),
+        py::arg("device_index") = 0);
+  m.def("free_pinned_ptr_xpu", &free_pinned_ptr_xpu, py::arg("ptr"),
+        py::arg("device_index") = 0);
+
   // CacheGen / RoPE kernels (Intel XPU).  Names match the
   // lmcache.python_ops_fallback module so the backend selection in
   // lmcache.v1.platform can transparently override.

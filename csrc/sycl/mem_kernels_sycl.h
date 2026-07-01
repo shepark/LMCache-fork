@@ -54,3 +54,7 @@ void reshape_and_cache_back_flash(torch::Tensor& key_value,
                                   torch::Tensor& value_cache,
                                   torch::Tensor& slot_mapping,
                                   const int layer_idx);
+
+// SYCL/XPU pinned (USM host) allocation -- analog of the CUDA alloc_pinned_ptr.
+uintptr_t alloc_pinned_ptr_xpu(size_t size, int device_index = 0);
+void free_pinned_ptr_xpu(uintptr_t ptr, int device_index = 0);
