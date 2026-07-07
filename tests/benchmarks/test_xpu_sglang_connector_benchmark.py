@@ -113,7 +113,7 @@ def _create_connector(
     chunk_size: int,
     dtype: torch.dtype,
     use_mla: bool = False,
-):
+) -> SGLangXPUConnector:
     # SGLangXPUConnector init signature:
     #   (hidden_dim_size, num_layers, use_gpu=False, **kwargs)
     # When use_gpu=True it also requires chunk_size, dtype, device kwargs.
@@ -128,7 +128,7 @@ def _create_connector(
     )
 
 
-def _kv_device(kvcaches) -> torch.device:
+def _kv_device(kvcaches: list) -> torch.device:
     """SGLang non-MLA kvcaches is [[k_list], [v_list]]; MLA is a flat list."""
     head = kvcaches[0]
     if isinstance(head, list):

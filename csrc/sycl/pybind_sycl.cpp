@@ -58,10 +58,11 @@ PYBIND11_MODULE(xpu_ops, m) {
         py::call_guard<py::gil_scoped_release>());
 
   // Pinned (USM host) allocation -- SYCL analog of the CUDA alloc_pinned_ptr.
-  m.def("alloc_pinned_ptr_xpu", &alloc_pinned_ptr_xpu, py::arg("size"),
-        py::arg("device_index") = 0);
-  m.def("free_pinned_ptr_xpu", &free_pinned_ptr_xpu, py::arg("ptr"),
-        py::arg("device_index") = 0);
+  // Bound under the same names as csrc/pybind.cpp / python_ops_fallback so
+  // lmcache._get_backend() overrides them by name on XPU.
+  m.def("alloc_pinned_ptr", &alloc_pinned_ptr, py::arg("size"),
+        py::arg("flags") = 0);
+  m.def("free_pinned_ptr", &free_pinned_ptr, py::arg("ptr"));
 
   // CacheGen / RoPE kernels (Intel XPU).  Names match the
   // lmcache.python_ops_fallback module so the backend selection in

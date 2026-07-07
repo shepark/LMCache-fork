@@ -1029,15 +1029,17 @@ void lmcache_memcpy_async(uintptr_t dest, uintptr_t src, size_t nbytes,
 // host memory, dropping D2H store throughput ~20x. sycl::malloc_host bound to
 // the current XPU device context gives true USM-pinned host memory.
 // ---------------------------------------------------------------------------
-uintptr_t alloc_pinned_ptr_xpu(size_t size, int device_index) {
-  sycl::queue& q = c10::xpu::getCurrentXPUStream(device_index).queue();
-  void* ptr = sycl::malloc_host(size, q.get_context());
-  TORCH_CHECK(ptr != nullptr,
-              "sycl::malloc_host failed for ", size, " bytes (XPU pinned host)");
+// `flags` is accepted for signature parity with the CUDA alloc_pinned_ptr and
+// ignored. All XPU devices in a process share one SYCL context
+// (c10::xpu::get_device_context), so the alloc/free context always matches
+// without tracking a device index.
+uintptr_t alloc_pinned_ptr(size_t size, unsigned int flags) {
+  void* ptr = sycl::malloc_host(size, c10::xpu::get_device_context());
+  TORCH_CHECK(ptr != nullptr, "sycl::malloc_host failed for ", size,
+              " bytes (XPU pinned host)");
   return reinterpret_cast<uintptr_t>(ptr);
 }
 
-void free_pinned_ptr_xpu(uintptr_t ptr, int device_index) {
-  sycl::queue& q = c10::xpu::getCurrentXPUStream(device_index).queue();
-  sycl::free(reinterpret_cast<void*>(ptr), q.get_context());
+void free_pinned_ptr(uintptr_t ptr) {
+  sycl::free(reinterpret_cast<void*>(ptr), c10::xpu::get_device_context());
 }
