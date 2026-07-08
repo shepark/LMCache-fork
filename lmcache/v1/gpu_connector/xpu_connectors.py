@@ -236,12 +236,6 @@ class VLLMPagedMemXPUConnectorV2(GPUConnectorInterface):
         kv_cache_pointers = self._initialize_pointers(self.kvcaches)
 
         with torch.xpu.stream(self.store_stream):
-            # Only route through the intermediate buffer when the chunk
-            # exactly fills it. A partial (smaller) chunk would slice the
-            # buffer to a non-contiguous view, but the SYCL kernel treats the
-            # base pointer as tightly packed [kv, num_layers, end-start, hidden]
-            # and would scatter every layer to the wrong offsets. Fall back to
-            # the direct path in that case (mirrors V3's `!= chunk_size`).
             if self.gpu_buffer is None or end - start != self.gpu_buffer.shape[2]:
                 lmc_ops.multi_layer_kv_transfer(
                     memory_obj.tensor,
@@ -1420,12 +1414,6 @@ class SGLangXPUConnector(GPUConnectorInterface):
 
         kv_cache_pointers = self._initialize_pointers(kvcaches)
 
-        # Only route through the intermediate buffer when the chunk exactly
-        # fills it. A partial (smaller) chunk would slice the buffer to a
-        # non-contiguous view, but multi_layer_kv_transfer_unilateral treats the
-        # base pointer as tightly packed [kv, num_layers, end-start, hidden] and
-        # would scatter every layer to the wrong offsets. Fall back to the
-        # direct path in that case (mirrors V2/V3's `!= chunk_size`).
         if self.gpu_buffer is None or end - start != self.gpu_buffer.shape[2]:
             lmc_ops.multi_layer_kv_transfer_unilateral(
                 memory_obj.tensor,

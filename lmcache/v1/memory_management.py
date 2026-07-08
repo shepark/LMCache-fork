@@ -600,18 +600,9 @@ def _allocate_cpu_memory(
             # shm / NUMA / hugepage allocations carry semantics a plain pageable
             # host buffer cannot preserve, so don't silently substitute one.
             raise
-        # The native pinned allocator rejected this size. On XPU in particular,
-        # sycl::malloc_host is capped at ~95% of a single device's VRAM (its
-        # max_mem_alloc_size ~= 30 GiB on B70), so a large max_local_cpu_size
-        # overflows it. Fall back to a plain pageable host buffer so the engine
-        # stays up (D2H is slower than pinned, but functional). NOTE: torch
-        # pin_memory=True is deliberately NOT used here -- torch's XPU pinned
-        # allocator returns a buffer that segfaults on access above ~16 GiB.
         logger.warning(
             "Pinned host allocation of %d bytes via the native allocator failed "
-            "(%s); falling back to pageable host memory. Reduce max_local_cpu_size "
-            "to keep the buffer within the pinned-allocation limit (~30 GiB on "
-            "B70) for faster D2H transfers.",
+            "(%s); falling back to pageable host memory.",
             size,
             e,
         )

@@ -1029,10 +1029,6 @@ void lmcache_memcpy_async(uintptr_t dest, uintptr_t src, size_t nbytes,
 // host memory, dropping D2H store throughput ~20x. sycl::malloc_host bound to
 // the current XPU device context gives true USM-pinned host memory.
 // ---------------------------------------------------------------------------
-// `flags` is accepted for signature parity with the CUDA alloc_pinned_ptr and
-// ignored. All XPU devices in a process share one SYCL context
-// (c10::xpu::get_device_context), so the alloc/free context always matches
-// without tracking a device index.
 uintptr_t alloc_pinned_ptr(size_t size, unsigned int flags) {
   void* ptr = sycl::malloc_host(size, c10::xpu::get_device_context());
   TORCH_CHECK(ptr != nullptr, "sycl::malloc_host failed for ", size,
